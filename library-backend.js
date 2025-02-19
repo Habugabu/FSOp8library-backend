@@ -1,6 +1,8 @@
 const { ApolloServer } = require("@apollo/server");
 const { startStandaloneServer } = require("@apollo/server/standalone");
 
+const { GraphQLError } = require("graphql");
+
 const mongoose = require("mongoose");
 mongoose.set("strictQuery", false);
 const Book = require("./models/book");
@@ -159,13 +161,20 @@ const resolvers = {
         return Book.find({});
       } else if (!args.genre) {
         const author = await Author.findOne({ name: args.author });
-        console.log(author);
-        return Book.find({ author: author._id });
+        if (!author) {
+          return [];
+        } else {
+          return Book.find({ author: author._id });
+        }
       } else if (!args.author) {
         return Book.find({ genres: args.genre });
       } else {
         const author = await Author.findOne({ name: args.author });
-        return Book.find({ author: author._id, genres: args.genre });
+        if (!author) {
+          return [];
+        } else {
+          return Book.find({ author: author._id, genres: args.genre });
+        }
       }
     },
     allAuthors: async () => Author.find({}),
@@ -185,20 +194,46 @@ const resolvers = {
       console.log(author);
       let book = {};
       if (!author) {
-        console.log("author not found");
         const newAuthor = new Author({ name: args.authorName });
-        const savedAuthor = await newAuthor.save();
-        book = new Book({ ...args, author: savedAuthor._id });
+        try {
+          await newAuthor.save();
+        } catch (error) {
+          throw new GraphQLError("Saving book failed", {
+            extensions: {
+              code: "BAD_USER_INPUT",
+              error,
+            },
+          });
+        }
+        book = new Book({ ...args, author: newAuthor._id });
       } else {
-        console.log("author found");
         book = new Book({ ...args, author: author._id });
       }
-      return book.save();
+      try {
+        await book.save();
+      } catch (error) {
+        throw new GraphQLError("Saving book failed", {
+          extensions: {
+            code: "BAD_USER_INPUT",
+            error,
+          },
+        });
+      }
+      return book;
     },
     editAuthor: async (root, args) => {
-      const author = await Author.findOne({ name: args.name });
-      author.born = args.setBornTo;
-      return author.save();
+      try {
+        const author = await Author.findOne({ name: args.name });
+        author.born = args.setBornTo;
+        return author.save();
+      } catch (error) {
+        throw new GraphQLError("Changing birthyear failed", {
+          extensions: {
+            code: "BAD_USER_INPUT",
+            error,
+          },
+        });
+      }
     },
   },
 };
