@@ -52,7 +52,6 @@ const resolvers = {
         });
       }
       const author = await Author.findOne({ name: args.authorName });
-      console.log(author);
       let book = {};
       if (!author) {
         const newAuthor = new Author({ name: args.authorName });
